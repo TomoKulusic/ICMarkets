@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  icmarkets-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: icmarkets-blockchain-api
+    ports:
+      - "5000:8080"
+      - "5001:8081"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080;https://+:8081
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    restart: unless-stopped

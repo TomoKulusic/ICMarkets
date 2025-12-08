@@ -1,6 +1,103 @@
-@ICMarkets_HostAddress = http://localhost:5002
+@ICMarkets_HostAddress = http://localhost:5000
 
-GET {{ICMarkets_HostAddress}}/weatherforecast/
+### Health Check
+GET {{ICMarkets_HostAddress}}/health
+Accept: application/json
+
+###
+
+### Get OpenAPI Specification
+GET {{ICMarkets_HostAddress}}/openapi/v1.json
+Accept: application/json
+
+###
+
+### Fetch Single Blockchain - ETH Main
+POST {{ICMarkets_HostAddress}}/api/blockchain/fetch?chain=eth&network=main
+Content-Type: application/json
+
+###
+
+### Fetch Single Blockchain - BTC Main
+POST {{ICMarkets_HostAddress}}/api/blockchain/fetch?chain=btc&network=main
+Content-Type: application/json
+
+###
+
+### Fetch Single Blockchain - BTC Test3
+POST {{ICMarkets_HostAddress}}/api/blockchain/fetch?chain=btc&network=test3
+Content-Type: application/json
+
+###
+
+### Fetch Single Blockchain - DASH Main
+POST {{ICMarkets_HostAddress}}/api/blockchain/fetch?chain=dash&network=main
+Content-Type: application/json
+
+###
+
+### Fetch Single Blockchain - LTC Main
+POST {{ICMarkets_HostAddress}}/api/blockchain/fetch?chain=ltc&network=main
+Content-Type: application/json
+
+###
+
+### Fetch ALL Blockchains (Parallel - 5 chains)
+POST {{ICMarkets_HostAddress}}/api/blockchain/fetch-all
+Content-Type: application/json
+
+###
+
+### Get All Blockchain Data (Ordered by CreatedAt DESC)
+GET {{ICMarkets_HostAddress}}/api/blockchain
+Accept: application/json
+
+###
+
+### Get Blockchain Data by Chain - ETH
+GET {{ICMarkets_HostAddress}}/api/blockchain/eth
+Accept: application/json
+
+###
+
+### Get Blockchain Data by Chain - BTC
+GET {{ICMarkets_HostAddress}}/api/blockchain/btc
+Accept: application/json
+
+###
+
+### Get Blockchain Data by Chain - DASH
+GET {{ICMarkets_HostAddress}}/api/blockchain/dash
+Accept: application/json
+
+###
+
+### Get Blockchain Data by Chain - LTC
+GET {{ICMarkets_HostAddress}}/api/blockchain/ltc
+Accept: application/json
+
+###
+
+### Get Latest Blockchain Data - ETH
+GET {{ICMarkets_HostAddress}}/api/blockchain/eth/latest
+Accept: application/json
+
+###
+
+### Get Latest Blockchain Data - BTC
+GET {{ICMarkets_HostAddress}}/api/blockchain/btc/latest
+Accept: application/json
+
+###
+
+### Get Latest Blockchain Data - DASH
+GET {{ICMarkets_HostAddress}}/api/blockchain/dash/latest
+Accept: application/json
+
+###
+
+### Get Latest Blockchain Data - LTC
+GET {{ICMarkets_HostAddress}}/api/blockchain/ltc/latest
 Accept: application/json
 
 ###

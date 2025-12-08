@@ -1,3 +1,5 @@
 <Solution>
+  <Project Path="ICMarkets.FunctionalTests/ICMarkets.FunctionalTests.csproj" />
+  <Project Path="ICMarkets.UnitTests/ICMarkets.UnitTests.csproj" />
   <Project Path="ICMarkets/ICMarkets.csproj" />
 </Solution>
