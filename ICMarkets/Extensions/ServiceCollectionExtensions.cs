@@ -30,10 +30,13 @@ public static class ServiceCollectionExtensions
                 "Please ensure appsettings.json contains a valid ConnectionStrings:DefaultConnection value.");
         }
         
-        // Add DbContext with SQLite
+        // Add DbContext with SQLite and WAL mode for better concurrency
         services.AddDbContext<ApplicationDbContext>(options =>
         {
-            options.UseSqlite(connectionString);
+            options.UseSqlite(connectionString, sqliteOptions =>
+            {
+                sqliteOptions.CommandTimeout(30);
+            });
             options.EnableSensitiveDataLogging(false);
             options.EnableDetailedErrors(false);
         });

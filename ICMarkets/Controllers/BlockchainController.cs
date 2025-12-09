@@ -27,7 +27,7 @@ public class BlockchainController : ControllerBase
     /// Returns the complete history of all fetched blockchain data.
     /// </summary>
     [HttpGet]
-    [ResponseCache(Duration = 30, VaryByQueryKeys = new string[] { })]
+    [ResponseCache(Duration = 10, VaryByQueryKeys = new string[] { }, Location = ResponseCacheLocation.None)]
     [ProducesResponseType(typeof(IEnumerable<BlockchainDataDto>), StatusCodes.Status200OK)]
     public async Task<ActionResult<IEnumerable<BlockchainDataDto>>> GetAllStoredBlockchainData(CancellationToken cancellationToken)
     {
@@ -45,7 +45,7 @@ public class BlockchainController : ControllerBase
     /// <param name="network">Optional network filter (main, test3, etc.)</param>
     /// <param name="cancellationToken">Cancellation token</param>
     [HttpGet("{chain}")]
-    [ResponseCache(Duration = 30, VaryByQueryKeys = new[] { "chain", "network" })]
+    [ResponseCache(Duration = 10, VaryByQueryKeys = new[] { "chain", "network" }, Location = ResponseCacheLocation.None)]
     [ProducesResponseType(typeof(IEnumerable<BlockchainDataDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<IEnumerable<BlockchainDataDto>>> GetStoredBlockchainDataByChain(
@@ -76,7 +76,7 @@ public class BlockchainController : ControllerBase
     /// <param name="network">Optional network filter (main, test3, etc.)</param>
     /// <param name="cancellationToken">Cancellation token</param>
     [HttpGet("{chain}/latest")]
-    [ResponseCache(Duration = 60, VaryByQueryKeys = new[] { "chain", "network" })]
+    [ResponseCache(Duration = 10, VaryByQueryKeys = new[] { "chain", "network" }, Location = ResponseCacheLocation.None)]
     [ProducesResponseType(typeof(BlockchainDataDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<BlockchainDataDto>> GetLatestStoredBlockchainData(

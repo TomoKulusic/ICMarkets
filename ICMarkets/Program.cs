@@ -47,6 +47,14 @@ try
         {
             // Use EnsureCreated for both environments (migrations can be added later)
             await context.Database.EnsureCreatedAsync();
+            
+            // Enable SQLite WAL mode for better concurrency and immediate write visibility
+            if (context.Database.IsSqlite())
+            {
+                await context.Database.ExecuteSqlRawAsync("PRAGMA journal_mode=WAL;");
+                await context.Database.ExecuteSqlRawAsync("PRAGMA synchronous=NORMAL;");
+            }
+            
             Log.Information("Database initialized successfully");
         }
         catch (Exception ex)
