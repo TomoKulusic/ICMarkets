@@ -23,3 +23,27 @@
 **/values.dev.yaml
 LICENSE
 README.md
+
+# Database files (will be mounted as volumes)
+**/*.db
+**/*.db-shm
+**/*.db-wal
+
+# Logs (will be mounted as volumes)
+**/logs/
+logs/
+
+# Documentation
+DOCKER_GUIDE.md
+DOCKER_SUMMARY.md
+IMPROVEMENTS.md
+COMMIT_SUMMARY.md
+BEFORE_AFTER_COMPARISON.md
+
+# Scripts
+docker-start.sh
+docker-start.bat
+
+# Test projects
+**/*Tests/
+**/*.Tests.csproj

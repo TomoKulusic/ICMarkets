@@ -1,18 +1,38 @@
-version: '3.8'
-
 services:
   icmarkets-api:
     build:
       context: .
       dockerfile: Dockerfile
+    image: icmarkets-api:latest
     container_name: icmarkets-blockchain-api
     ports:
       - "5000:8080"
-      - "5001:8081"
     environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - ASPNETCORE_URLS=http://+:8080;https://+:8081
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:8080
+      - ConnectionStrings__DefaultConnection=Data Source=/app/data/icmarkets.db
     volumes:
-      - ./data:/app/data
-      - ./logs:/app/logs
+      - icmarkets-data:/app/data
+      - icmarkets-logs:/app/logs
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - icmarkets-network
+
+volumes:
+  icmarkets-data:
+    driver: local
+    name: icmarkets-data
+  icmarkets-logs:
+    driver: local
+    name: icmarkets-logs
+
+networks:
+  icmarkets-network:
+    driver: bridge
+    name: icmarkets-network

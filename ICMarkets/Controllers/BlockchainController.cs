@@ -1,6 +1,7 @@
 using ICMarkets.Application.Commands;
 using ICMarkets.Application.DTOs;
 using ICMarkets.Application.Queries;
+using ICMarkets.Constants;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -9,7 +10,7 @@ namespace ICMarkets.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[EnableRateLimiting("fixed")]
+[EnableRateLimiting(RateLimitPolicies.Fixed)]
 public class BlockchainController : ControllerBase
 {
     private readonly IMediator _mediator;
@@ -106,7 +107,7 @@ public class BlockchainController : ControllerBase
     /// <param name="network">Network type (main, test3, etc.)</param>
     /// <param name="cancellationToken">Cancellation token</param>
     [HttpPost("fetch")]
-    [EnableRateLimiting("fetch")]
+    [EnableRateLimiting(RateLimitPolicies.Fetch)]
     [ProducesResponseType(typeof(BlockchainDataDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
@@ -142,7 +143,7 @@ public class BlockchainController : ControllerBase
     /// Rate limited to 10 requests per minute.
     /// </summary>
     [HttpPost("fetch-all")]
-    [EnableRateLimiting("fetch")]
+    [EnableRateLimiting(RateLimitPolicies.Fetch)]
     [ProducesResponseType(typeof(IEnumerable<BlockchainDataDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]

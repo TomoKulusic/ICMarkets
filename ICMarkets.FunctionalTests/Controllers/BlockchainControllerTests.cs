@@ -159,16 +159,20 @@ public class BlockchainControllerTests : IClassFixture<TestWebApplicationFactory
         // Note: Rate limiting in test environment may not work the same as production
         // This test verifies the system handles multiple requests gracefully
         
-        // Act - Send multiple requests rapidly
+        // Act - Send multiple requests rapidly using valid chains
         var responses = new List<HttpStatusCode>();
+        var validChains = new[] { "eth", "btc", "dash", "ltc", "doge" };
+        
         for (int i = 0; i < 15; i++)
         {
-            var response = await _client.PostAsync($"/api/blockchain/fetch?chain=test{i}&network=main", null);
+            var chain = validChains[i % validChains.Length];
+            var response = await _client.PostAsync($"/api/blockchain/fetch?chain={chain}&network=main", null);
             responses.Add(response.StatusCode);
         }
 
-        // Assert - Verify we got responses
+        // Assert - Verify we got responses (mix of OK and potentially rate limited)
         responses.Should().NotBeEmpty();
+        // At least some requests should succeed
         responses.Should().Contain(HttpStatusCode.OK);
     }
 
@@ -196,16 +200,16 @@ public class BlockchainControllerTests : IClassFixture<TestWebApplicationFactory
     public async Task CompleteWorkflow_FetchAndRetrieve_ShouldWork()
     {
         // 1. Verify no data exists initially in the in-memory database
-        var initialResponse = await _client.GetAsync("/api/blockchain/xrp/latest");
+        var initialResponse = await _client.GetAsync("/api/blockchain/doge/latest");
         initialResponse.StatusCode.Should().Be(HttpStatusCode.NotFound);
 
         // 2. Fetch fresh data from mocked API and store in database
-        var fetchResponse = await _client.PostAsync("/api/blockchain/fetch?chain=xrp&network=main", null);
+        var fetchResponse = await _client.PostAsync("/api/blockchain/fetch?chain=doge&network=main", null);
         fetchResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         var fetchedData = await fetchResponse.Content.ReadFromJsonAsync<BlockchainDataDto>();
 
         // 3. Retrieve the fetched data from in-memory database
-        var getResponse = await _client.GetAsync("/api/blockchain/xrp/latest?network=main");
+        var getResponse = await _client.GetAsync("/api/blockchain/doge/latest?network=main");
         getResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         var retrievedData = await getResponse.Content.ReadFromJsonAsync<BlockchainDataDto>();
 
@@ -221,7 +225,7 @@ public class BlockchainControllerTests : IClassFixture<TestWebApplicationFactory
 
         // 6. Verify mock API was called
         _factory.MockBlockCypherClient.Verify(
-            x => x.GetBlockchainDataAsync("xrp", "main", It.IsAny<CancellationToken>()),
+            x => x.GetBlockchainDataAsync("doge", "main", It.IsAny<CancellationToken>()),
             Times.AtLeastOnce);
     }
 }

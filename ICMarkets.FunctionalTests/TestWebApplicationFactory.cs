@@ -1,5 +1,4 @@
 using ICMarkets.Domain.Interfaces;
-using ICMarkets.Infrastructure.Contexts;
 using ICMarkets.Infrastructure.Data;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -11,7 +10,7 @@ using Moq;
 namespace ICMarkets.FunctionalTests;
 
 /// <summary>
-/// Custom WebApplicationFactory for functional tests.
+/// Custom WebApplicationFactory for functional tests with Entity Framework Core.
 /// Configures in-memory SQLite database and mocked external services.
 /// </summary>
 public class TestWebApplicationFactory : WebApplicationFactory<Program>, IDisposable
@@ -23,32 +22,28 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>, IDispos
     {
         builder.ConfigureServices(services =>
         {
-            // Remove existing DbContext registrations
-            var descriptors = services.Where(d =>
-                d.ServiceType == typeof(DbContextOptions<ApplicationDbContext>) ||
-                d.ServiceType == typeof(DbContextOptions<WriteDbContext>) ||
-                d.ServiceType == typeof(DbContextOptions<ReadDbContext>))
-                .ToList();
-
-            foreach (var descriptor in descriptors)
+            // Remove existing DbContext registration
+            var descriptor = services.SingleOrDefault(d => d.ServiceType == typeof(DbContextOptions<ApplicationDbContext>));
+            if (descriptor != null)
             {
                 services.Remove(descriptor);
             }
+            
+            var contextDescriptor = services.SingleOrDefault(d => d.ServiceType == typeof(ApplicationDbContext));
+            if (contextDescriptor != null)
+            {
+                services.Remove(contextDescriptor);
+            }
 
             // Create and open a single SQLite in-memory connection
-            // Keep it open so the database persists across requests
             _connection = new SqliteConnection("DataSource=:memory:");
             _connection.Open();
 
-            // Configure all DbContexts to use the same in-memory connection
+            // Add test DbContext configuration with in-memory SQLite
             services.AddDbContext<ApplicationDbContext>(options =>
-                options.UseSqlite(_connection));
-            
-            services.AddDbContext<WriteDbContext>(options =>
-                options.UseSqlite(_connection));
-            
-            services.AddDbContext<ReadDbContext>(options =>
-                options.UseSqlite(_connection));
+            {
+                options.UseSqlite(_connection);
+            });
 
             // Remove existing BlockCypher client and replace with mock
             var clientDescriptor = services.SingleOrDefault(d => d.ServiceType == typeof(IBlockCypherClient));
@@ -57,7 +52,7 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>, IDispos
                 services.Remove(clientDescriptor);
             }
 
-            // Mock BlockCypher API responses with realistic data
+            // Mock BlockCypher API responses
             MockBlockCypherClient
                 .Setup(x => x.GetBlockchainDataAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync((string chain, string network, CancellationToken _) =>
@@ -65,11 +60,11 @@ public class TestWebApplicationFactory : WebApplicationFactory<Program>, IDispos
 
             services.AddScoped(_ => MockBlockCypherClient.Object);
 
-            // Build the service provider and initialize the database
+            // Initialize database
             var sp = services.BuildServiceProvider();
             using var scope = sp.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-            db.Database.EnsureCreated();
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            context.Database.EnsureCreated();
         });
     }
 

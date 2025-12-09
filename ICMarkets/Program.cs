@@ -1,15 +1,12 @@
-using ICMarkets.Application.Mappings;
-using ICMarkets.Domain.Interfaces;
+using ICMarkets.Constants;
+using ICMarkets.Extensions;
 using ICMarkets.Infrastructure.Data;
-using ICMarkets.Infrastructure.Contexts;
-using ICMarkets.Infrastructure.ExternalServices;
-using ICMarkets.Infrastructure.Repositories;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
-using System.Reflection;
 using Scalar.AspNetCore;
-using Microsoft.AspNetCore.RateLimiting;
-using System.Threading.RateLimiting;
+using HealthChecks.UI.Client;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -22,128 +19,101 @@ Log.Logger = new LoggerConfiguration()
 
 builder.Host.UseSerilog();
 
-// Add services to the container
-builder.Services.AddControllers();
-
-// Add OpenAPI
-builder.Services.AddOpenApi();
-
-// Add DbContext configurations for Read/Write separation
-// Write DbContext - Primary database for write operations (Commands)
-builder.Services.AddDbContext<WriteDbContext>(options =>
-    options.UseSqlite(
-        builder.Configuration.GetConnectionString("WriteConnection"),
-        sqliteOptions => sqliteOptions.CommandTimeout(30)));
-
-// Read DbContext - Read replica for read operations (Queries)
-builder.Services.AddDbContext<ReadDbContext>(options =>
-    options.UseSqlite(
-        builder.Configuration.GetConnectionString("ReadConnection"),
-        sqliteOptions => sqliteOptions.CommandTimeout(30)));
-
-// Keep ApplicationDbContext for backwards compatibility and initialization
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlite(
-        builder.Configuration.GetConnectionString("DefaultConnection"),
-        sqliteOptions => sqliteOptions.CommandTimeout(30)));
-
-// Add AutoMapper
-builder.Services.AddAutoMapper(typeof(MappingProfile));
-
-// Add MediatR
-builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(Assembly.GetExecutingAssembly()));
-
-// Add HttpClient with optimized settings
-builder.Services.AddHttpClient<IBlockCypherClient, BlockCypherClient>(client =>
+try
 {
-    client.Timeout = TimeSpan.FromSeconds(30);
-})
-.ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
-{
-    MaxConnectionsPerServer = 10
-})
-.SetHandlerLifetime(TimeSpan.FromMinutes(5));
+    Log.Information("Starting ICMarkets Web API");
 
-// Add Repository and UnitOfWork
-builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
-builder.Services.AddScoped<IBlockchainRepository, BlockchainRepository>();
+    // Add services to the container
+    builder.Services.AddControllers();
+    builder.Services.AddOpenApi();
 
-// Add Memory Cache for performance
-builder.Services.AddMemoryCache();
-builder.Services.AddResponseCaching();
+    // Add application layers
+    builder.Services.AddApplicationServices();
+    builder.Services.AddInfrastructureServices(builder.Configuration);
+    builder.Services.AddCachingServices();
+    builder.Services.AddCompressionServices();
+    builder.Services.AddRateLimitingServices();
+    builder.Services.AddHealthCheckServices(builder.Configuration);
+    builder.Services.AddCorsServices(builder.Configuration);
 
-// Add Rate Limiting
-builder.Services.AddRateLimiter(options =>
-{
-    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-    
-    // Fixed window rate limiter for general API calls
-    options.AddFixedWindowLimiter("fixed", opt =>
+    var app = builder.Build();
+
+    // Initialize database with migrations (production-safe)
+    using (var scope = app.Services.CreateScope())
     {
-        opt.PermitLimit = 100;
-        opt.Window = TimeSpan.FromMinutes(1);
-        opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-        opt.QueueLimit = 10;
-    });
-    
-    // Stricter rate limiter for fetch operations
-    options.AddFixedWindowLimiter("fetch", opt =>
+        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        
+        try
+        {
+            // Use EnsureCreated for both environments (migrations can be added later)
+            await context.Database.EnsureCreatedAsync();
+            Log.Information("Database initialized successfully");
+        }
+        catch (Exception ex)
+        {
+            Log.Fatal(ex, "An error occurred while initializing the database");
+            throw;
+        }
+    }
+
+    // Global exception handler (must be first)
+    app.UseExceptionHandler(errorApp =>
     {
-        opt.PermitLimit = 10;
-        opt.Window = TimeSpan.FromMinutes(1);
-        opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-        opt.QueueLimit = 2;
+        errorApp.Run(async context =>
+        {
+            context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+            context.Response.ContentType = "application/json";
+            
+            var error = context.Features.Get<IExceptionHandlerFeature>();
+            if (error != null)
+            {
+                var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+                logger.LogError(error.Error, "Unhandled exception: {Message}", error.Error.Message);
+                
+                var problemDetails = new
+                {
+                    type = "https://tools.ietf.org/html/rfc7231#section-6.6.1",
+                    title = "An error occurred while processing your request",
+                    status = StatusCodes.Status500InternalServerError,
+                    detail = app.Environment.IsDevelopment() ? error.Error.Message : "An internal server error occurred",
+                    traceId = context.TraceIdentifier
+                };
+                
+                await context.Response.WriteAsJsonAsync(problemDetails);
+            }
+        });
     });
-});
 
-// Add Health Checks
-builder.Services.AddHealthChecks()
-    .AddSqlite(builder.Configuration.GetConnectionString("DefaultConnection")!);
-
-// Add CORS
-var corsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? new[] { "*" };
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("DefaultCorsPolicy", policy =>
-    {
-        policy.WithOrigins(corsOrigins)
-              .AllowAnyMethod()
-              .AllowAnyHeader()
-              .AllowCredentials();
-    });
-});
-
-var app = builder.Build();
-
-// Ensure database is created (using default connection)
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    db.Database.EnsureCreated();
-}
-
-// Configure the HTTP request pipeline
-if (app.Environment.IsDevelopment())
-{
+    // Configure the HTTP request pipeline
     app.MapOpenApi();
-    app.MapScalarApiReference();
+    app.MapScalarApiReference(options =>
+    {
+        options.WithTitle("ICMarkets Blockchain API");
+        options.WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient);
+    });
+
+    app.UseHttpsRedirection();
+    app.UseCors(CorsPolicies.Default);
+    app.UseResponseCompression();
+    app.UseResponseCaching();
+    app.UseRateLimiter();
+    app.UseAuthorization();
+
+    app.MapControllers();
+    app.MapHealthChecks(ApiEndpoints.Health, new HealthCheckOptions
+    {
+        ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
+    });
+
+    Log.Information("ICMarkets Web API started successfully");
+    app.Run();
 }
-
-app.UseHttpsRedirection();
-
-app.UseCors("DefaultCorsPolicy");
-
-// Enable response caching
-app.UseResponseCaching();
-
-// Enable rate limiting
-app.UseRateLimiter();
-
-app.UseAuthorization();
-
-app.MapControllers();
-
-// Map Health Checks
-app.MapHealthChecks("/health");
-
-app.Run();
+catch (Exception ex)
+{
+    Log.Fatal(ex, "Application startup failed");
+    throw;
+}
+finally
+{
+    Log.CloseAndFlush();
+}

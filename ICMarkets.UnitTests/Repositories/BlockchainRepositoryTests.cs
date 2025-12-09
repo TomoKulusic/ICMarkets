@@ -1,6 +1,5 @@
 using FluentAssertions;
 using ICMarkets.Domain.Entities;
-using ICMarkets.Infrastructure.Contexts;
 using ICMarkets.Infrastructure.Data;
 using ICMarkets.Infrastructure.Repositories;
 using Microsoft.EntityFrameworkCore;
@@ -8,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 namespace ICMarkets.UnitTests.Repositories;
 
 /// <summary>
-/// Unit tests for BlockchainRepository.
+/// Unit tests for BlockchainRepository with Entity Framework Core.
 /// Tests repository methods in isolation with in-memory database.
 /// </summary>
 public class BlockchainRepositoryTests : IDisposable
@@ -19,10 +18,14 @@ public class BlockchainRepositoryTests : IDisposable
     public BlockchainRepositoryTests()
     {
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .UseSqlite($"DataSource=:memory:")
             .Options;
 
         _context = new ApplicationDbContext(options);
+        
+        _context.Database.OpenConnection();
+        _context.Database.EnsureCreated();
+        
         _repository = new BlockchainRepository(_context);
     }
 
@@ -46,7 +49,8 @@ public class BlockchainRepositoryTests : IDisposable
             CreatedAt = DateTime.UtcNow
         };
 
-        await _context.BlockchainData.AddRangeAsync(olderData, newerData);
+        await _repository.AddAsync(olderData);
+        await _repository.AddAsync(newerData);
         await _context.SaveChangesAsync();
 
         // Act
@@ -78,7 +82,8 @@ public class BlockchainRepositoryTests : IDisposable
             CreatedAt = DateTime.UtcNow
         };
 
-        await _context.BlockchainData.AddRangeAsync(btcData, ethData);
+        await _repository.AddAsync(btcData);
+        await _repository.AddAsync(ethData);
         await _context.SaveChangesAsync();
 
         // Act
@@ -109,7 +114,8 @@ public class BlockchainRepositoryTests : IDisposable
             CreatedAt = DateTime.UtcNow
         };
 
-        await _context.BlockchainData.AddRangeAsync(btcMain, btcTest);
+        await _repository.AddAsync(btcMain);
+        await _repository.AddAsync(btcTest);
         await _context.SaveChangesAsync();
 
         // Act
@@ -140,7 +146,8 @@ public class BlockchainRepositoryTests : IDisposable
             CreatedAt = DateTime.UtcNow
         };
 
-        await _context.BlockchainData.AddRangeAsync(olderData, newerData);
+        await _repository.AddAsync(olderData);
+        await _repository.AddAsync(newerData);
         await _context.SaveChangesAsync();
 
         // Act
@@ -164,13 +171,14 @@ public class BlockchainRepositoryTests : IDisposable
         };
 
         // Act
-        await _repository.AddAsync(newData);
+        var result = await _repository.AddAsync(newData);
         await _context.SaveChangesAsync();
 
         // Assert
-        var result = await _context.BlockchainData.FirstOrDefaultAsync(x => x.Chain == "ltc");
-        result.Should().NotBeNull();
-        result!.Chain.Should().Be("ltc");
+        result.Id.Should().BeGreaterThan(0);
+        var retrieved = (await _repository.GetByChainAsync("ltc")).FirstOrDefault();
+        retrieved.Should().NotBeNull();
+        retrieved!.Chain.Should().Be("ltc");
     }
 
     [Theory]
@@ -188,7 +196,7 @@ public class BlockchainRepositoryTests : IDisposable
             CreatedAt = DateTime.UtcNow
         };
 
-        await _context.BlockchainData.AddAsync(data);
+        await _repository.AddAsync(data);
         await _context.SaveChangesAsync();
 
         // Act
@@ -196,6 +204,40 @@ public class BlockchainRepositoryTests : IDisposable
 
         // Assert
         result.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public async Task AddRangeAsync_WithMultipleEntries_ShouldAddAllInTransaction()
+    {
+        // Arrange
+        var data = new List<BlockchainData>
+        {
+            new()
+            {
+                Chain = "btc",
+                Network = "main",
+                RawJsonData = "{\"height\":1}",
+                CreatedAt = DateTime.UtcNow
+            },
+            new()
+            {
+                Chain = "eth",
+                Network = "main",
+                RawJsonData = "{\"height\":2}",
+                CreatedAt = DateTime.UtcNow
+            }
+        };
+
+        // Act
+        var results = (await _repository.AddRangeAsync(data)).ToList();
+        await _context.SaveChangesAsync();
+
+        // Assert
+        results.Should().HaveCount(2);
+        results.All(r => r.Id > 0).Should().BeTrue();
+        
+        var allData = (await _repository.GetAllAsync()).ToList();
+        allData.Should().HaveCount(2);
     }
 
     public void Dispose()
